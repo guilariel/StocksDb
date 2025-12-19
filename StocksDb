@@ -1,0 +1,1430 @@
+--
+-- PostgreSQL database dump
+--
+
+-- Dumped from database version 17.5
+-- Dumped by pg_dump version 17.5
+
+-- Started on 2025-12-18 23:46:05
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET transaction_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+--
+-- TOC entry 6 (class 2615 OID 66596)
+-- Name: hangfire; Type: SCHEMA; Schema: -; Owner: postgres
+--
+
+CREATE SCHEMA hangfire;
+
+
+ALTER SCHEMA hangfire OWNER TO postgres;
+
+--
+-- TOC entry 260 (class 1255 OID 83856)
+-- Name: get_monthly_profit(integer, text); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.get_monthly_profit(p_user_id integer, p_currency text) RETURNS integer
+    LANGUAGE plpgsql
+    AS $$
+declare
+    v_profit integer;
+    v_time timestamp;
+begin
+	  v_time := NOW() - INTERVAL '1 month';
+
+	SELECT COALESCE(
+        SUM(
+            CASE 
+                WHEN type = 'buy'  THEN -price
+                WHEN type = 'sell' THEN  price
+            END
+        ),
+        0
+    )
+	INTO v_profit 
+	from public.transaction_history 
+	where 
+	user_id = p_user_id and
+	currency = p_currency and
+	date >= v_time;
+	
+	return v_profit;
+end;
+$$;
+
+
+ALTER FUNCTION public.get_monthly_profit(p_user_id integer, p_currency text) OWNER TO postgres;
+
+--
+-- TOC entry 259 (class 1255 OID 83857)
+-- Name: get_yearly_profit(integer, text); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.get_yearly_profit(p_user_id integer, p_currency text) RETURNS integer
+    LANGUAGE plpgsql
+    AS $$
+declare
+    v_profit integer;
+    v_time timestamp;
+begin
+	  v_time := NOW() - INTERVAL '1 year';
+
+	SELECT COALESCE(
+        SUM(
+            CASE 
+                WHEN type = 'buy'  THEN -price
+                WHEN type = 'sell' THEN  price
+            END
+        ),
+        0
+    )
+	INTO v_profit 
+	from public.transaction_history 
+	where 
+	user_id = p_user_id and
+	currency = p_currency and
+	date >= v_time;
+	
+	return v_profit;
+end;
+$$;
+
+
+ALTER FUNCTION public.get_yearly_profit(p_user_id integer, p_currency text) OWNER TO postgres;
+
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+--
+-- TOC entry 238 (class 1259 OID 66888)
+-- Name: aggregatedcounter; Type: TABLE; Schema: hangfire; Owner: postgres
+--
+
+CREATE TABLE hangfire.aggregatedcounter (
+    id bigint NOT NULL,
+    key text NOT NULL,
+    value bigint NOT NULL,
+    expireat timestamp with time zone
+);
+
+
+ALTER TABLE hangfire.aggregatedcounter OWNER TO postgres;
+
+--
+-- TOC entry 237 (class 1259 OID 66887)
+-- Name: aggregatedcounter_id_seq; Type: SEQUENCE; Schema: hangfire; Owner: postgres
+--
+
+CREATE SEQUENCE hangfire.aggregatedcounter_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE hangfire.aggregatedcounter_id_seq OWNER TO postgres;
+
+--
+-- TOC entry 4992 (class 0 OID 0)
+-- Dependencies: 237
+-- Name: aggregatedcounter_id_seq; Type: SEQUENCE OWNED BY; Schema: hangfire; Owner: postgres
+--
+
+ALTER SEQUENCE hangfire.aggregatedcounter_id_seq OWNED BY hangfire.aggregatedcounter.id;
+
+
+--
+-- TOC entry 220 (class 1259 OID 66603)
+-- Name: counter; Type: TABLE; Schema: hangfire; Owner: postgres
+--
+
+CREATE TABLE hangfire.counter (
+    id bigint NOT NULL,
+    key text NOT NULL,
+    value bigint NOT NULL,
+    expireat timestamp with time zone
+);
+
+
+ALTER TABLE hangfire.counter OWNER TO postgres;
+
+--
+-- TOC entry 219 (class 1259 OID 66602)
+-- Name: counter_id_seq; Type: SEQUENCE; Schema: hangfire; Owner: postgres
+--
+
+CREATE SEQUENCE hangfire.counter_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE hangfire.counter_id_seq OWNER TO postgres;
+
+--
+-- TOC entry 4993 (class 0 OID 0)
+-- Dependencies: 219
+-- Name: counter_id_seq; Type: SEQUENCE OWNED BY; Schema: hangfire; Owner: postgres
+--
+
+ALTER SEQUENCE hangfire.counter_id_seq OWNED BY hangfire.counter.id;
+
+
+--
+-- TOC entry 222 (class 1259 OID 66611)
+-- Name: hash; Type: TABLE; Schema: hangfire; Owner: postgres
+--
+
+CREATE TABLE hangfire.hash (
+    id bigint NOT NULL,
+    key text NOT NULL,
+    field text NOT NULL,
+    value text,
+    expireat timestamp with time zone,
+    updatecount integer DEFAULT 0 NOT NULL
+);
+
+
+ALTER TABLE hangfire.hash OWNER TO postgres;
+
+--
+-- TOC entry 221 (class 1259 OID 66610)
+-- Name: hash_id_seq; Type: SEQUENCE; Schema: hangfire; Owner: postgres
+--
+
+CREATE SEQUENCE hangfire.hash_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE hangfire.hash_id_seq OWNER TO postgres;
+
+--
+-- TOC entry 4994 (class 0 OID 0)
+-- Dependencies: 221
+-- Name: hash_id_seq; Type: SEQUENCE OWNED BY; Schema: hangfire; Owner: postgres
+--
+
+ALTER SEQUENCE hangfire.hash_id_seq OWNED BY hangfire.hash.id;
+
+
+--
+-- TOC entry 224 (class 1259 OID 66622)
+-- Name: job; Type: TABLE; Schema: hangfire; Owner: postgres
+--
+
+CREATE TABLE hangfire.job (
+    id bigint NOT NULL,
+    stateid bigint,
+    statename text,
+    invocationdata jsonb NOT NULL,
+    arguments jsonb NOT NULL,
+    createdat timestamp with time zone NOT NULL,
+    expireat timestamp with time zone,
+    updatecount integer DEFAULT 0 NOT NULL
+);
+
+
+ALTER TABLE hangfire.job OWNER TO postgres;
+
+--
+-- TOC entry 223 (class 1259 OID 66621)
+-- Name: job_id_seq; Type: SEQUENCE; Schema: hangfire; Owner: postgres
+--
+
+CREATE SEQUENCE hangfire.job_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE hangfire.job_id_seq OWNER TO postgres;
+
+--
+-- TOC entry 4995 (class 0 OID 0)
+-- Dependencies: 223
+-- Name: job_id_seq; Type: SEQUENCE OWNED BY; Schema: hangfire; Owner: postgres
+--
+
+ALTER SEQUENCE hangfire.job_id_seq OWNED BY hangfire.job.id;
+
+
+--
+-- TOC entry 235 (class 1259 OID 66682)
+-- Name: jobparameter; Type: TABLE; Schema: hangfire; Owner: postgres
+--
+
+CREATE TABLE hangfire.jobparameter (
+    id bigint NOT NULL,
+    jobid bigint NOT NULL,
+    name text NOT NULL,
+    value text,
+    updatecount integer DEFAULT 0 NOT NULL
+);
+
+
+ALTER TABLE hangfire.jobparameter OWNER TO postgres;
+
+--
+-- TOC entry 234 (class 1259 OID 66681)
+-- Name: jobparameter_id_seq; Type: SEQUENCE; Schema: hangfire; Owner: postgres
+--
+
+CREATE SEQUENCE hangfire.jobparameter_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE hangfire.jobparameter_id_seq OWNER TO postgres;
+
+--
+-- TOC entry 4996 (class 0 OID 0)
+-- Dependencies: 234
+-- Name: jobparameter_id_seq; Type: SEQUENCE OWNED BY; Schema: hangfire; Owner: postgres
+--
+
+ALTER SEQUENCE hangfire.jobparameter_id_seq OWNED BY hangfire.jobparameter.id;
+
+
+--
+-- TOC entry 228 (class 1259 OID 66647)
+-- Name: jobqueue; Type: TABLE; Schema: hangfire; Owner: postgres
+--
+
+CREATE TABLE hangfire.jobqueue (
+    id bigint NOT NULL,
+    jobid bigint NOT NULL,
+    queue text NOT NULL,
+    fetchedat timestamp with time zone,
+    updatecount integer DEFAULT 0 NOT NULL
+);
+
+
+ALTER TABLE hangfire.jobqueue OWNER TO postgres;
+
+--
+-- TOC entry 227 (class 1259 OID 66646)
+-- Name: jobqueue_id_seq; Type: SEQUENCE; Schema: hangfire; Owner: postgres
+--
+
+CREATE SEQUENCE hangfire.jobqueue_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE hangfire.jobqueue_id_seq OWNER TO postgres;
+
+--
+-- TOC entry 4997 (class 0 OID 0)
+-- Dependencies: 227
+-- Name: jobqueue_id_seq; Type: SEQUENCE OWNED BY; Schema: hangfire; Owner: postgres
+--
+
+ALTER SEQUENCE hangfire.jobqueue_id_seq OWNED BY hangfire.jobqueue.id;
+
+
+--
+-- TOC entry 230 (class 1259 OID 66655)
+-- Name: list; Type: TABLE; Schema: hangfire; Owner: postgres
+--
+
+CREATE TABLE hangfire.list (
+    id bigint NOT NULL,
+    key text NOT NULL,
+    value text,
+    expireat timestamp with time zone,
+    updatecount integer DEFAULT 0 NOT NULL
+);
+
+
+ALTER TABLE hangfire.list OWNER TO postgres;
+
+--
+-- TOC entry 229 (class 1259 OID 66654)
+-- Name: list_id_seq; Type: SEQUENCE; Schema: hangfire; Owner: postgres
+--
+
+CREATE SEQUENCE hangfire.list_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE hangfire.list_id_seq OWNER TO postgres;
+
+--
+-- TOC entry 4998 (class 0 OID 0)
+-- Dependencies: 229
+-- Name: list_id_seq; Type: SEQUENCE OWNED BY; Schema: hangfire; Owner: postgres
+--
+
+ALTER SEQUENCE hangfire.list_id_seq OWNED BY hangfire.list.id;
+
+
+--
+-- TOC entry 236 (class 1259 OID 66696)
+-- Name: lock; Type: TABLE; Schema: hangfire; Owner: postgres
+--
+
+CREATE TABLE hangfire.lock (
+    resource text NOT NULL,
+    updatecount integer DEFAULT 0 NOT NULL,
+    acquired timestamp with time zone
+);
+
+
+ALTER TABLE hangfire.lock OWNER TO postgres;
+
+--
+-- TOC entry 218 (class 1259 OID 66597)
+-- Name: schema; Type: TABLE; Schema: hangfire; Owner: postgres
+--
+
+CREATE TABLE hangfire.schema (
+    version integer NOT NULL
+);
+
+
+ALTER TABLE hangfire.schema OWNER TO postgres;
+
+--
+-- TOC entry 231 (class 1259 OID 66663)
+-- Name: server; Type: TABLE; Schema: hangfire; Owner: postgres
+--
+
+CREATE TABLE hangfire.server (
+    id text NOT NULL,
+    data jsonb,
+    lastheartbeat timestamp with time zone NOT NULL,
+    updatecount integer DEFAULT 0 NOT NULL
+);
+
+
+ALTER TABLE hangfire.server OWNER TO postgres;
+
+--
+-- TOC entry 233 (class 1259 OID 66671)
+-- Name: set; Type: TABLE; Schema: hangfire; Owner: postgres
+--
+
+CREATE TABLE hangfire.set (
+    id bigint NOT NULL,
+    key text NOT NULL,
+    score double precision NOT NULL,
+    value text NOT NULL,
+    expireat timestamp with time zone,
+    updatecount integer DEFAULT 0 NOT NULL
+);
+
+
+ALTER TABLE hangfire.set OWNER TO postgres;
+
+--
+-- TOC entry 232 (class 1259 OID 66670)
+-- Name: set_id_seq; Type: SEQUENCE; Schema: hangfire; Owner: postgres
+--
+
+CREATE SEQUENCE hangfire.set_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE hangfire.set_id_seq OWNER TO postgres;
+
+--
+-- TOC entry 4999 (class 0 OID 0)
+-- Dependencies: 232
+-- Name: set_id_seq; Type: SEQUENCE OWNED BY; Schema: hangfire; Owner: postgres
+--
+
+ALTER SEQUENCE hangfire.set_id_seq OWNED BY hangfire.set.id;
+
+
+--
+-- TOC entry 226 (class 1259 OID 66632)
+-- Name: state; Type: TABLE; Schema: hangfire; Owner: postgres
+--
+
+CREATE TABLE hangfire.state (
+    id bigint NOT NULL,
+    jobid bigint NOT NULL,
+    name text NOT NULL,
+    reason text,
+    createdat timestamp with time zone NOT NULL,
+    data jsonb,
+    updatecount integer DEFAULT 0 NOT NULL
+);
+
+
+ALTER TABLE hangfire.state OWNER TO postgres;
+
+--
+-- TOC entry 225 (class 1259 OID 66631)
+-- Name: state_id_seq; Type: SEQUENCE; Schema: hangfire; Owner: postgres
+--
+
+CREATE SEQUENCE hangfire.state_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE hangfire.state_id_seq OWNER TO postgres;
+
+--
+-- TOC entry 5000 (class 0 OID 0)
+-- Dependencies: 225
+-- Name: state_id_seq; Type: SEQUENCE OWNED BY; Schema: hangfire; Owner: postgres
+--
+
+ALTER SEQUENCE hangfire.state_id_seq OWNED BY hangfire.state.id;
+
+
+--
+-- TOC entry 247 (class 1259 OID 83942)
+-- Name: in_possession; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.in_possession (
+    owner_id bigint NOT NULL,
+    stock_id bigint NOT NULL,
+    amount bigint NOT NULL,
+    CONSTRAINT in_possession_amount_check CHECK ((amount > 0))
+);
+
+
+ALTER TABLE public.in_possession OWNER TO postgres;
+
+--
+-- TOC entry 244 (class 1259 OID 83702)
+-- Name: price_history; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.price_history (
+    stock_id integer NOT NULL,
+    price integer NOT NULL,
+    currency text NOT NULL,
+    date timestamp without time zone NOT NULL,
+    CONSTRAINT price_history_currency_check CHECK ((currency = ANY (ARRAY['USD'::text, 'ARS'::text, 'EUR'::text])))
+);
+
+
+ALTER TABLE public.price_history OWNER TO postgres;
+
+--
+-- TOC entry 243 (class 1259 OID 83695)
+-- Name: stock; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.stock (
+    id integer NOT NULL,
+    symbol text NOT NULL,
+    name text NOT NULL,
+    description text NOT NULL
+);
+
+
+ALTER TABLE public.stock OWNER TO postgres;
+
+--
+-- TOC entry 242 (class 1259 OID 83694)
+-- Name: stock_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+ALTER TABLE public.stock ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.stock_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- TOC entry 246 (class 1259 OID 83791)
+-- Name: transaction_history; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.transaction_history (
+    id integer NOT NULL,
+    owner_id integer NOT NULL,
+    stock_id integer NOT NULL,
+    amount integer NOT NULL,
+    price integer NOT NULL,
+    currency text NOT NULL,
+    date timestamp without time zone NOT NULL,
+    type text NOT NULL,
+    CONSTRAINT transaction_history_amount_check CHECK ((amount > 0)),
+    CONSTRAINT transaction_history_currency_check CHECK ((currency = ANY (ARRAY['USD'::text, 'ARS'::text, 'EUR'::text]))),
+    CONSTRAINT transaction_history_price_check CHECK ((price > 0)),
+    CONSTRAINT transaction_history_type_check CHECK ((type = ANY (ARRAY['buy'::text, 'sell'::text])))
+);
+
+
+ALTER TABLE public.transaction_history OWNER TO postgres;
+
+--
+-- TOC entry 245 (class 1259 OID 83790)
+-- Name: transaction_history_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+ALTER TABLE public.transaction_history ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.transaction_history_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- TOC entry 241 (class 1259 OID 83681)
+-- Name: user_funds; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.user_funds (
+    user_id integer NOT NULL,
+    funds integer,
+    currency text NOT NULL,
+    CONSTRAINT user_funds_currency_check CHECK ((currency = ANY (ARRAY['USD'::text, 'ARS'::text, 'EUR'::text])))
+);
+
+
+ALTER TABLE public.user_funds OWNER TO postgres;
+
+--
+-- TOC entry 240 (class 1259 OID 83674)
+-- Name: users; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.users (
+    id integer NOT NULL,
+    name text NOT NULL,
+    password_hash text NOT NULL
+);
+
+
+ALTER TABLE public.users OWNER TO postgres;
+
+--
+-- TOC entry 239 (class 1259 OID 83673)
+-- Name: users_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+ALTER TABLE public.users ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.users_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- TOC entry 4740 (class 2604 OID 66891)
+-- Name: aggregatedcounter id; Type: DEFAULT; Schema: hangfire; Owner: postgres
+--
+
+ALTER TABLE ONLY hangfire.aggregatedcounter ALTER COLUMN id SET DEFAULT nextval('hangfire.aggregatedcounter_id_seq'::regclass);
+
+
+--
+-- TOC entry 4723 (class 2604 OID 66729)
+-- Name: counter id; Type: DEFAULT; Schema: hangfire; Owner: postgres
+--
+
+ALTER TABLE ONLY hangfire.counter ALTER COLUMN id SET DEFAULT nextval('hangfire.counter_id_seq'::regclass);
+
+
+--
+-- TOC entry 4724 (class 2604 OID 66738)
+-- Name: hash id; Type: DEFAULT; Schema: hangfire; Owner: postgres
+--
+
+ALTER TABLE ONLY hangfire.hash ALTER COLUMN id SET DEFAULT nextval('hangfire.hash_id_seq'::regclass);
+
+
+--
+-- TOC entry 4726 (class 2604 OID 66748)
+-- Name: job id; Type: DEFAULT; Schema: hangfire; Owner: postgres
+--
+
+ALTER TABLE ONLY hangfire.job ALTER COLUMN id SET DEFAULT nextval('hangfire.job_id_seq'::regclass);
+
+
+--
+-- TOC entry 4737 (class 2604 OID 66798)
+-- Name: jobparameter id; Type: DEFAULT; Schema: hangfire; Owner: postgres
+--
+
+ALTER TABLE ONLY hangfire.jobparameter ALTER COLUMN id SET DEFAULT nextval('hangfire.jobparameter_id_seq'::regclass);
+
+
+--
+-- TOC entry 4730 (class 2604 OID 66821)
+-- Name: jobqueue id; Type: DEFAULT; Schema: hangfire; Owner: postgres
+--
+
+ALTER TABLE ONLY hangfire.jobqueue ALTER COLUMN id SET DEFAULT nextval('hangfire.jobqueue_id_seq'::regclass);
+
+
+--
+-- TOC entry 4732 (class 2604 OID 66841)
+-- Name: list id; Type: DEFAULT; Schema: hangfire; Owner: postgres
+--
+
+ALTER TABLE ONLY hangfire.list ALTER COLUMN id SET DEFAULT nextval('hangfire.list_id_seq'::regclass);
+
+
+--
+-- TOC entry 4735 (class 2604 OID 66850)
+-- Name: set id; Type: DEFAULT; Schema: hangfire; Owner: postgres
+--
+
+ALTER TABLE ONLY hangfire.set ALTER COLUMN id SET DEFAULT nextval('hangfire.set_id_seq'::regclass);
+
+
+--
+-- TOC entry 4728 (class 2604 OID 66775)
+-- Name: state id; Type: DEFAULT; Schema: hangfire; Owner: postgres
+--
+
+ALTER TABLE ONLY hangfire.state ALTER COLUMN id SET DEFAULT nextval('hangfire.state_id_seq'::regclass);
+
+
+--
+-- TOC entry 4977 (class 0 OID 66888)
+-- Dependencies: 238
+-- Data for Name: aggregatedcounter; Type: TABLE DATA; Schema: hangfire; Owner: postgres
+--
+
+COPY hangfire.aggregatedcounter (id, key, value, expireat) FROM stdin;
+2	stats:succeeded:2025-11-15	5	2025-12-15 14:05:11.398994-03
+16	stats:succeeded:2025-11-16	23	2025-12-16 17:20:12.938387-03
+105	stats:succeeded:2025-11-21	44	2025-12-21 18:35:10.852808-03
+231	stats:succeeded:2025-11-22	23	2025-12-22 20:58:07.009346-03
+78	stats:succeeded:2025-11-19	11	2025-12-19 18:59:59.939461-03
+286	stats:succeeded:2025-11-23	63	2025-12-23 16:25:00.59423-03
+473	stats:succeeded:2025-12-02	11	2026-01-02 16:20:07.099732-03
+3	stats:succeeded	184	\N
+\.
+
+
+--
+-- TOC entry 4959 (class 0 OID 66603)
+-- Dependencies: 220
+-- Data for Name: counter; Type: TABLE DATA; Schema: hangfire; Owner: postgres
+--
+
+COPY hangfire.counter (id, key, value, expireat) FROM stdin;
+556	stats:succeeded:2025-12-13	1	2026-01-12 23:47:32.219579-03
+557	stats:succeeded:2025-12-13-02	1	2025-12-13 23:47:33.219579-03
+558	stats:succeeded	1	\N
+\.
+
+
+--
+-- TOC entry 4961 (class 0 OID 66611)
+-- Dependencies: 222
+-- Data for Name: hash; Type: TABLE DATA; Schema: hangfire; Owner: postgres
+--
+
+COPY hangfire.hash (id, key, field, value, expireat, updatecount) FROM stdin;
+1	recurring-job:UpdateStocks	Queue	default	\N	0
+2	recurring-job:UpdateStocks	Cron	*/5 * * * *	\N	0
+3	recurring-job:UpdateStocks	TimeZoneId	UTC	\N	0
+4	recurring-job:UpdateStocks	Job	{"Type":"StocksApp.Application.UseCases.RepositoryUseCases.UpdateCompanys, StocksApp, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null","Method":"UpdateAsync","ParameterTypes":"[]","Arguments":"[]"}	\N	0
+5	recurring-job:UpdateStocks	CreatedAt	2025-11-14T16:07:59.8355020Z	\N	0
+7	recurring-job:UpdateStocks	V	2	\N	0
+8	recurring-job:UpdateStocks	LastExecution	2025-12-13T02:47:32.2760950Z	\N	0
+6	recurring-job:UpdateStocks	NextExecution	2025-12-13T02:50:00.0000000Z	\N	0
+9	recurring-job:UpdateStocks	LastJobId	181	\N	0
+\.
+
+
+--
+-- TOC entry 4963 (class 0 OID 66622)
+-- Dependencies: 224
+-- Data for Name: job; Type: TABLE DATA; Schema: hangfire; Owner: postgres
+--
+
+COPY hangfire.job (id, stateid, statename, invocationdata, arguments, createdat, expireat, updatecount) FROM stdin;
+181	544	Succeeded	{"Type": "StocksApp.Application.UseCases.RepositoryUseCases.UpdateCompanys, StocksApp, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null", "Method": "UpdateAsync", "Arguments": "[]", "ParameterTypes": "[]"}	[]	2025-12-12 23:47:32.543113-03	2025-12-13 23:47:33.219579-03	0
+\.
+
+
+--
+-- TOC entry 4974 (class 0 OID 66682)
+-- Dependencies: 235
+-- Data for Name: jobparameter; Type: TABLE DATA; Schema: hangfire; Owner: postgres
+--
+
+COPY hangfire.jobparameter (id, jobid, name, value, updatecount) FROM stdin;
+721	181	RecurringJobId	"UpdateStocks"	0
+722	181	Time	1765594052	0
+723	181	CurrentCulture	"es-AR"	0
+724	181	CurrentUICulture	"es-MX"	0
+\.
+
+
+--
+-- TOC entry 4967 (class 0 OID 66647)
+-- Dependencies: 228
+-- Data for Name: jobqueue; Type: TABLE DATA; Schema: hangfire; Owner: postgres
+--
+
+COPY hangfire.jobqueue (id, jobid, queue, fetchedat, updatecount) FROM stdin;
+\.
+
+
+--
+-- TOC entry 4969 (class 0 OID 66655)
+-- Dependencies: 230
+-- Data for Name: list; Type: TABLE DATA; Schema: hangfire; Owner: postgres
+--
+
+COPY hangfire.list (id, key, value, expireat, updatecount) FROM stdin;
+\.
+
+
+--
+-- TOC entry 4975 (class 0 OID 66696)
+-- Dependencies: 236
+-- Data for Name: lock; Type: TABLE DATA; Schema: hangfire; Owner: postgres
+--
+
+COPY hangfire.lock (resource, updatecount, acquired) FROM stdin;
+\.
+
+
+--
+-- TOC entry 4957 (class 0 OID 66597)
+-- Dependencies: 218
+-- Data for Name: schema; Type: TABLE DATA; Schema: hangfire; Owner: postgres
+--
+
+COPY hangfire.schema (version) FROM stdin;
+23
+\.
+
+
+--
+-- TOC entry 4970 (class 0 OID 66663)
+-- Dependencies: 231
+-- Data for Name: server; Type: TABLE DATA; Schema: hangfire; Owner: postgres
+--
+
+COPY hangfire.server (id, data, lastheartbeat, updatecount) FROM stdin;
+desktop-4ko5j46:11704:47ccb161-969a-41f9-9ad8-83a56ab385b0	{"Queues": ["default"], "StartedAt": "2025-12-13T02:47:30.4472386Z", "WorkerCount": 20}	2025-12-12 23:49:01.098507-03	0
+\.
+
+
+--
+-- TOC entry 4972 (class 0 OID 66671)
+-- Dependencies: 233
+-- Data for Name: set; Type: TABLE DATA; Schema: hangfire; Owner: postgres
+--
+
+COPY hangfire.set (id, key, score, value, expireat, updatecount) FROM stdin;
+1	recurring-jobs	1765594200	UpdateStocks	\N	0
+\.
+
+
+--
+-- TOC entry 4965 (class 0 OID 66632)
+-- Dependencies: 226
+-- Data for Name: state; Type: TABLE DATA; Schema: hangfire; Owner: postgres
+--
+
+COPY hangfire.state (id, jobid, name, reason, createdat, data, updatecount) FROM stdin;
+543	181	Processing	\N	2025-12-12 23:47:33.021287-03	{"ServerId": "desktop-4ko5j46:11704:47ccb161-969a-41f9-9ad8-83a56ab385b0", "WorkerId": "b669ad8b-3464-47f4-be98-de6d1f6710af", "StartedAt": "2025-12-13T02:47:32.9510001Z"}	0
+544	181	Succeeded	\N	2025-12-12 23:47:33.316369-03	{"Latency": "497", "SucceededAt": "2025-12-13T02:47:33.1711508Z", "PerformanceDuration": "130"}	0
+542	181	Enqueued	Triggered by recurring job scheduler	2025-12-12 23:47:32.816303-03	{"Queue": "default", "EnqueuedAt": "2025-12-13T02:47:32.7824312Z"}	0
+\.
+
+
+--
+-- TOC entry 4986 (class 0 OID 83942)
+-- Dependencies: 247
+-- Data for Name: in_possession; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.in_possession (owner_id, stock_id, amount) FROM stdin;
+\.
+
+
+--
+-- TOC entry 4983 (class 0 OID 83702)
+-- Dependencies: 244
+-- Data for Name: price_history; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.price_history (stock_id, price, currency, date) FROM stdin;
+\.
+
+
+--
+-- TOC entry 4982 (class 0 OID 83695)
+-- Dependencies: 243
+-- Data for Name: stock; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.stock (id, symbol, name, description) FROM stdin;
+\.
+
+
+--
+-- TOC entry 4985 (class 0 OID 83791)
+-- Dependencies: 246
+-- Data for Name: transaction_history; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.transaction_history (id, owner_id, stock_id, amount, price, currency, date, type) FROM stdin;
+\.
+
+
+--
+-- TOC entry 4980 (class 0 OID 83681)
+-- Dependencies: 241
+-- Data for Name: user_funds; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.user_funds (user_id, funds, currency) FROM stdin;
+\.
+
+
+--
+-- TOC entry 4979 (class 0 OID 83674)
+-- Dependencies: 240
+-- Data for Name: users; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.users (id, name, password_hash) FROM stdin;
+\.
+
+
+--
+-- TOC entry 5001 (class 0 OID 0)
+-- Dependencies: 237
+-- Name: aggregatedcounter_id_seq; Type: SEQUENCE SET; Schema: hangfire; Owner: postgres
+--
+
+SELECT pg_catalog.setval('hangfire.aggregatedcounter_id_seq', 500, true);
+
+
+--
+-- TOC entry 5002 (class 0 OID 0)
+-- Dependencies: 219
+-- Name: counter_id_seq; Type: SEQUENCE SET; Schema: hangfire; Owner: postgres
+--
+
+SELECT pg_catalog.setval('hangfire.counter_id_seq', 558, true);
+
+
+--
+-- TOC entry 5003 (class 0 OID 0)
+-- Dependencies: 221
+-- Name: hash_id_seq; Type: SEQUENCE SET; Schema: hangfire; Owner: postgres
+--
+
+SELECT pg_catalog.setval('hangfire.hash_id_seq', 9, true);
+
+
+--
+-- TOC entry 5004 (class 0 OID 0)
+-- Dependencies: 223
+-- Name: job_id_seq; Type: SEQUENCE SET; Schema: hangfire; Owner: postgres
+--
+
+SELECT pg_catalog.setval('hangfire.job_id_seq', 181, true);
+
+
+--
+-- TOC entry 5005 (class 0 OID 0)
+-- Dependencies: 234
+-- Name: jobparameter_id_seq; Type: SEQUENCE SET; Schema: hangfire; Owner: postgres
+--
+
+SELECT pg_catalog.setval('hangfire.jobparameter_id_seq', 724, true);
+
+
+--
+-- TOC entry 5006 (class 0 OID 0)
+-- Dependencies: 227
+-- Name: jobqueue_id_seq; Type: SEQUENCE SET; Schema: hangfire; Owner: postgres
+--
+
+SELECT pg_catalog.setval('hangfire.jobqueue_id_seq', 181, true);
+
+
+--
+-- TOC entry 5007 (class 0 OID 0)
+-- Dependencies: 229
+-- Name: list_id_seq; Type: SEQUENCE SET; Schema: hangfire; Owner: postgres
+--
+
+SELECT pg_catalog.setval('hangfire.list_id_seq', 1, false);
+
+
+--
+-- TOC entry 5008 (class 0 OID 0)
+-- Dependencies: 232
+-- Name: set_id_seq; Type: SEQUENCE SET; Schema: hangfire; Owner: postgres
+--
+
+SELECT pg_catalog.setval('hangfire.set_id_seq', 182, true);
+
+
+--
+-- TOC entry 5009 (class 0 OID 0)
+-- Dependencies: 225
+-- Name: state_id_seq; Type: SEQUENCE SET; Schema: hangfire; Owner: postgres
+--
+
+SELECT pg_catalog.setval('hangfire.state_id_seq', 544, true);
+
+
+--
+-- TOC entry 5010 (class 0 OID 0)
+-- Dependencies: 242
+-- Name: stock_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+--
+
+SELECT pg_catalog.setval('public.stock_id_seq', 1, false);
+
+
+--
+-- TOC entry 5011 (class 0 OID 0)
+-- Dependencies: 245
+-- Name: transaction_history_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+--
+
+SELECT pg_catalog.setval('public.transaction_history_id_seq', 1, false);
+
+
+--
+-- TOC entry 5012 (class 0 OID 0)
+-- Dependencies: 239
+-- Name: users_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+--
+
+SELECT pg_catalog.setval('public.users_id_seq', 1, false);
+
+
+--
+-- TOC entry 4789 (class 2606 OID 66897)
+-- Name: aggregatedcounter aggregatedcounter_key_key; Type: CONSTRAINT; Schema: hangfire; Owner: postgres
+--
+
+ALTER TABLE ONLY hangfire.aggregatedcounter
+    ADD CONSTRAINT aggregatedcounter_key_key UNIQUE (key);
+
+
+--
+-- TOC entry 4791 (class 2606 OID 66895)
+-- Name: aggregatedcounter aggregatedcounter_pkey; Type: CONSTRAINT; Schema: hangfire; Owner: postgres
+--
+
+ALTER TABLE ONLY hangfire.aggregatedcounter
+    ADD CONSTRAINT aggregatedcounter_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4751 (class 2606 OID 66731)
+-- Name: counter counter_pkey; Type: CONSTRAINT; Schema: hangfire; Owner: postgres
+--
+
+ALTER TABLE ONLY hangfire.counter
+    ADD CONSTRAINT counter_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4755 (class 2606 OID 66866)
+-- Name: hash hash_key_field_key; Type: CONSTRAINT; Schema: hangfire; Owner: postgres
+--
+
+ALTER TABLE ONLY hangfire.hash
+    ADD CONSTRAINT hash_key_field_key UNIQUE (key, field);
+
+
+--
+-- TOC entry 4757 (class 2606 OID 66740)
+-- Name: hash hash_pkey; Type: CONSTRAINT; Schema: hangfire; Owner: postgres
+--
+
+ALTER TABLE ONLY hangfire.hash
+    ADD CONSTRAINT hash_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4763 (class 2606 OID 66750)
+-- Name: job job_pkey; Type: CONSTRAINT; Schema: hangfire; Owner: postgres
+--
+
+ALTER TABLE ONLY hangfire.job
+    ADD CONSTRAINT job_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4785 (class 2606 OID 66800)
+-- Name: jobparameter jobparameter_pkey; Type: CONSTRAINT; Schema: hangfire; Owner: postgres
+--
+
+ALTER TABLE ONLY hangfire.jobparameter
+    ADD CONSTRAINT jobparameter_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4771 (class 2606 OID 66823)
+-- Name: jobqueue jobqueue_pkey; Type: CONSTRAINT; Schema: hangfire; Owner: postgres
+--
+
+ALTER TABLE ONLY hangfire.jobqueue
+    ADD CONSTRAINT jobqueue_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4774 (class 2606 OID 66843)
+-- Name: list list_pkey; Type: CONSTRAINT; Schema: hangfire; Owner: postgres
+--
+
+ALTER TABLE ONLY hangfire.list
+    ADD CONSTRAINT list_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4787 (class 2606 OID 66722)
+-- Name: lock lock_resource_key; Type: CONSTRAINT; Schema: hangfire; Owner: postgres
+--
+
+ALTER TABLE ONLY hangfire.lock
+    ADD CONSTRAINT lock_resource_key UNIQUE (resource);
+
+ALTER TABLE ONLY hangfire.lock REPLICA IDENTITY USING INDEX lock_resource_key;
+
+
+--
+-- TOC entry 4749 (class 2606 OID 66601)
+-- Name: schema schema_pkey; Type: CONSTRAINT; Schema: hangfire; Owner: postgres
+--
+
+ALTER TABLE ONLY hangfire.schema
+    ADD CONSTRAINT schema_pkey PRIMARY KEY (version);
+
+
+--
+-- TOC entry 4776 (class 2606 OID 66869)
+-- Name: server server_pkey; Type: CONSTRAINT; Schema: hangfire; Owner: postgres
+--
+
+ALTER TABLE ONLY hangfire.server
+    ADD CONSTRAINT server_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4780 (class 2606 OID 66871)
+-- Name: set set_key_value_key; Type: CONSTRAINT; Schema: hangfire; Owner: postgres
+--
+
+ALTER TABLE ONLY hangfire.set
+    ADD CONSTRAINT set_key_value_key UNIQUE (key, value);
+
+
+--
+-- TOC entry 4782 (class 2606 OID 66852)
+-- Name: set set_pkey; Type: CONSTRAINT; Schema: hangfire; Owner: postgres
+--
+
+ALTER TABLE ONLY hangfire.set
+    ADD CONSTRAINT set_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4766 (class 2606 OID 66777)
+-- Name: state state_pkey; Type: CONSTRAINT; Schema: hangfire; Owner: postgres
+--
+
+ALTER TABLE ONLY hangfire.state
+    ADD CONSTRAINT state_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4803 (class 2606 OID 83947)
+-- Name: in_possession in_possession_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.in_possession
+    ADD CONSTRAINT in_possession_pkey PRIMARY KEY (owner_id, stock_id);
+
+
+--
+-- TOC entry 4799 (class 2606 OID 83709)
+-- Name: price_history price_history_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.price_history
+    ADD CONSTRAINT price_history_pkey PRIMARY KEY (stock_id, date);
+
+
+--
+-- TOC entry 4797 (class 2606 OID 83701)
+-- Name: stock stock_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.stock
+    ADD CONSTRAINT stock_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4801 (class 2606 OID 83801)
+-- Name: transaction_history transaction_history_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.transaction_history
+    ADD CONSTRAINT transaction_history_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4795 (class 2606 OID 83688)
+-- Name: user_funds user_funds_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.user_funds
+    ADD CONSTRAINT user_funds_pkey PRIMARY KEY (user_id, currency);
+
+
+--
+-- TOC entry 4793 (class 2606 OID 83680)
+-- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+
+
+--
+-- TOC entry 4752 (class 1259 OID 66905)
+-- Name: ix_hangfire_counter_expireat; Type: INDEX; Schema: hangfire; Owner: postgres
+--
+
+CREATE INDEX ix_hangfire_counter_expireat ON hangfire.counter USING btree (expireat);
+
+
+--
+-- TOC entry 4753 (class 1259 OID 66860)
+-- Name: ix_hangfire_counter_key; Type: INDEX; Schema: hangfire; Owner: postgres
+--
+
+CREATE INDEX ix_hangfire_counter_key ON hangfire.counter USING btree (key);
+
+
+--
+-- TOC entry 4758 (class 1259 OID 66914)
+-- Name: ix_hangfire_hash_expireat; Type: INDEX; Schema: hangfire; Owner: postgres
+--
+
+CREATE INDEX ix_hangfire_hash_expireat ON hangfire.hash USING btree (expireat);
+
+
+--
+-- TOC entry 4759 (class 1259 OID 66931)
+-- Name: ix_hangfire_job_expireat; Type: INDEX; Schema: hangfire; Owner: postgres
+--
+
+CREATE INDEX ix_hangfire_job_expireat ON hangfire.job USING btree (expireat);
+
+
+--
+-- TOC entry 4760 (class 1259 OID 66867)
+-- Name: ix_hangfire_job_statename; Type: INDEX; Schema: hangfire; Owner: postgres
+--
+
+CREATE INDEX ix_hangfire_job_statename ON hangfire.job USING btree (statename);
+
+
+--
+-- TOC entry 4761 (class 1259 OID 67018)
+-- Name: ix_hangfire_job_statename_is_not_null; Type: INDEX; Schema: hangfire; Owner: postgres
+--
+
+CREATE INDEX ix_hangfire_job_statename_is_not_null ON hangfire.job USING btree (statename) INCLUDE (id) WHERE (statename IS NOT NULL);
+
+
+--
+-- TOC entry 4783 (class 1259 OID 66872)
+-- Name: ix_hangfire_jobparameter_jobidandname; Type: INDEX; Schema: hangfire; Owner: postgres
+--
+
+CREATE INDEX ix_hangfire_jobparameter_jobidandname ON hangfire.jobparameter USING btree (jobid, name);
+
+
+--
+-- TOC entry 4767 (class 1259 OID 67017)
+-- Name: ix_hangfire_jobqueue_fetchedat_queue_jobid; Type: INDEX; Schema: hangfire; Owner: postgres
+--
+
+CREATE INDEX ix_hangfire_jobqueue_fetchedat_queue_jobid ON hangfire.jobqueue USING btree (fetchedat NULLS FIRST, queue, jobid);
+
+
+--
+-- TOC entry 4768 (class 1259 OID 66832)
+-- Name: ix_hangfire_jobqueue_jobidandqueue; Type: INDEX; Schema: hangfire; Owner: postgres
+--
+
+CREATE INDEX ix_hangfire_jobqueue_jobidandqueue ON hangfire.jobqueue USING btree (jobid, queue);
+
+
+--
+-- TOC entry 4769 (class 1259 OID 66940)
+-- Name: ix_hangfire_jobqueue_queueandfetchedat; Type: INDEX; Schema: hangfire; Owner: postgres
+--
+
+CREATE INDEX ix_hangfire_jobqueue_queueandfetchedat ON hangfire.jobqueue USING btree (queue, fetchedat);
+
+
+--
+-- TOC entry 4772 (class 1259 OID 66951)
+-- Name: ix_hangfire_list_expireat; Type: INDEX; Schema: hangfire; Owner: postgres
+--
+
+CREATE INDEX ix_hangfire_list_expireat ON hangfire.list USING btree (expireat);
+
+
+--
+-- TOC entry 4777 (class 1259 OID 66971)
+-- Name: ix_hangfire_set_expireat; Type: INDEX; Schema: hangfire; Owner: postgres
+--
+
+CREATE INDEX ix_hangfire_set_expireat ON hangfire.set USING btree (expireat);
+
+
+--
+-- TOC entry 4778 (class 1259 OID 66886)
+-- Name: ix_hangfire_set_key_score; Type: INDEX; Schema: hangfire; Owner: postgres
+--
+
+CREATE INDEX ix_hangfire_set_key_score ON hangfire.set USING btree (key, score);
+
+
+--
+-- TOC entry 4764 (class 1259 OID 66785)
+-- Name: ix_hangfire_state_jobid; Type: INDEX; Schema: hangfire; Owner: postgres
+--
+
+CREATE INDEX ix_hangfire_state_jobid ON hangfire.state USING btree (jobid);
+
+
+--
+-- TOC entry 4805 (class 2606 OID 66809)
+-- Name: jobparameter jobparameter_jobid_fkey; Type: FK CONSTRAINT; Schema: hangfire; Owner: postgres
+--
+
+ALTER TABLE ONLY hangfire.jobparameter
+    ADD CONSTRAINT jobparameter_jobid_fkey FOREIGN KEY (jobid) REFERENCES hangfire.job(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- TOC entry 4804 (class 2606 OID 66786)
+-- Name: state state_jobid_fkey; Type: FK CONSTRAINT; Schema: hangfire; Owner: postgres
+--
+
+ALTER TABLE ONLY hangfire.state
+    ADD CONSTRAINT state_jobid_fkey FOREIGN KEY (jobid) REFERENCES hangfire.job(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- TOC entry 4810 (class 2606 OID 83948)
+-- Name: in_possession fk_inpossession_stock; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.in_possession
+    ADD CONSTRAINT fk_inpossession_stock FOREIGN KEY (stock_id) REFERENCES public.stock(id) ON DELETE CASCADE;
+
+
+--
+-- TOC entry 4811 (class 2606 OID 83953)
+-- Name: in_possession fk_inpossession_user; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.in_possession
+    ADD CONSTRAINT fk_inpossession_user FOREIGN KEY (owner_id) REFERENCES public.users(id);
+
+
+--
+-- TOC entry 4808 (class 2606 OID 83802)
+-- Name: transaction_history fk_transaction_history_stock; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.transaction_history
+    ADD CONSTRAINT fk_transaction_history_stock FOREIGN KEY (stock_id) REFERENCES public.stock(id) ON DELETE CASCADE;
+
+
+--
+-- TOC entry 4809 (class 2606 OID 83807)
+-- Name: transaction_history fk_transaction_history_user; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.transaction_history
+    ADD CONSTRAINT fk_transaction_history_user FOREIGN KEY (owner_id) REFERENCES public.users(id);
+
+
+--
+-- TOC entry 4807 (class 2606 OID 83710)
+-- Name: price_history price_history_stock_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.price_history
+    ADD CONSTRAINT price_history_stock_id_fkey FOREIGN KEY (stock_id) REFERENCES public.stock(id);
+
+
+--
+-- TOC entry 4806 (class 2606 OID 83689)
+-- Name: user_funds user_funds_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.user_funds
+    ADD CONSTRAINT user_funds_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
+
+
+-- Completed on 2025-12-18 23:46:05
+
+--
+-- PostgreSQL database dump complete
+--
+
